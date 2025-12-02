@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -8,7 +8,6 @@ import {
   Popup,
   LayersControl,
 } from "react-leaflet";
-
 import L from "leaflet";
 
 type Device = {
@@ -16,8 +15,8 @@ type Device = {
   name: string;
   clientName?: string;
   category: string;
-  lat: number;
-  lng: number;
+  lat: number | null;
+  lng: number | null;
   battery: number | null;
   charging: boolean | null;
   lastHeartbeat?: string;
@@ -25,8 +24,9 @@ type Device = {
 
 const { BaseLayer } = LayersControl;
 
-// Correction des icônes Leaflet dans Next.js
-// (évite le bug des marqueurs invisibles)
+/* ============================================================
+   🔧 Icône Leaflet par défaut (OK Next.js / Cloudflare)
+============================================================ */
 const defaultIcon = L.icon({
   iconUrl:
     "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
@@ -37,66 +37,85 @@ const defaultIcon = L.icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
+
+// on applique à tous les markers
 L.Marker.prototype.options.icon = defaultIcon;
 
+/* ============================================================
+   🗺️ Composant principal
+============================================================ */
 export default function DevicesMap({ devices }: { devices: Device[] }) {
-  // centre par défaut : Ouaga
-  const defaultCenter: [number, number] = [12.3657, -1.5339];
+  const defaultCenter: [number, number] = [12.3657, -1.5339]; // Ouagadougou
 
-  // on calcule un centre moyen si on a des devices géolocalisés
-  const coords = devices.filter((d) => d.lat || d.lng);
-  const center: [number, number] =
-    coords.length > 0
-      ? [
-          coords.reduce((sum, d) => sum + d.lat, 0) / coords.length,
-          coords.reduce((sum, d) => sum + d.lng, 0) / coords.length,
-        ]
-      : defaultCenter;
+  // Devices avec coordonnés valides
+  const coords = useMemo(
+    () =>
+      (devices || []).filter(
+        (d) =>
+          typeof d.lat === "number" &&
+          !Number.isNaN(d.lat) &&
+          typeof d.lng === "number" &&
+          !Number.isNaN(d.lng)
+      ),
+    [devices]
+  );
 
-  // Leaflet CSS côté client
-  useEffect(() => {
-    // rien de spécial, le CSS est déjà importé
-  }, []);
+  // Centre moyen des devices, sinon centre par défaut
+  const center = useMemo<[number, number]>(() => {
+    if (coords.length === 0) return defaultCenter;
+
+    const sumLat = coords.reduce((sum, d) => sum + (d.lat as number), 0);
+    const sumLng = coords.reduce((sum, d) => sum + (d.lng as number), 0);
+
+    return [sumLat / coords.length, sumLng / coords.length];
+  }, [coords]);
 
   return (
     <MapContainer
       center={center}
-      zoom={11}
-      scrollWheelZoom={true}
+      zoom={12}
+      scrollWheelZoom
       style={{ width: "100%", height: "100%" }}
     >
       <LayersControl position="topright">
-        <BaseLayer checked name="Routier">
+        <BaseLayer checked name="Routier (OSM)">
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors'
+            attribution="&copy; OpenStreetMap contributors"
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
         </BaseLayer>
 
-        <BaseLayer name="Satellite">
+        <BaseLayer name="Satellite (Esri)">
           <TileLayer
-            attribution='Tiles &copy; <a href="https://www.esri.com/">Esri</a>'
+            attribution="Tiles &copy; Esri"
             url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           />
         </BaseLayer>
       </LayersControl>
 
+      {/* Marqueurs */}
       {coords.map((d) => (
-        <Marker key={d.deviceId} position={[d.lat, d.lng]}>
+        <Marker
+          key={d.deviceId}
+          position={[d.lat as number, d.lng as number]}
+        >
           <Popup>
-            <div className="text-xs">
+            <div className="text-xs leading-tight">
               <div className="font-semibold mb-1">{d.name}</div>
+
               <div className="mb-1">
-                <span className="font-medium">Client:&nbsp;</span>
+                <span className="font-medium">Client&nbsp;:</span>{" "}
                 {d.clientName || "-"}
               </div>
+
               <div className="mb-1">
-                <span className="font-medium">Catégorie:&nbsp;</span>
+                <span className="font-medium">Catégorie&nbsp;:</span>{" "}
                 {d.category}
               </div>
+
               {typeof d.battery === "number" && (
                 <div className="mb-1">
-                  <span className="font-medium">Batterie:&nbsp;</span>
+                  <span className="font-medium">Batterie&nbsp;:</span>{" "}
                   {d.battery}%{" "}
                   <span className="text-[10px] text-gray-500">
                     {d.charging === true
@@ -107,9 +126,10 @@ export default function DevicesMap({ devices }: { devices: Device[] }) {
                   </span>
                 </div>
               )}
+
               {d.lastHeartbeat && (
                 <div className="text-[10px] text-gray-500">
-                  Dernier heartbeat:{" "}
+                  Dernier HB&nbsp;:
                   {new Date(d.lastHeartbeat).toLocaleString("fr-FR", {
                     day: "2-digit",
                     month: "2-digit",

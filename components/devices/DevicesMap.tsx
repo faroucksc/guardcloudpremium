@@ -1,41 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  MapContainer,
-  TileLayer,
-  Marker,
-  Popup,
-} from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
-
-// Fix icônes Leaflet pour Next/Webpack
-import iconUrl from "leaflet/dist/images/marker-icon.png";
-import iconRetinaUrl from "leaflet/dist/images/marker-icon-2x.png";
-import shadowUrl from "leaflet/dist/images/marker-shadow.png";
-
-// Corriger le prototype par défaut (bug classique Leaflet + Next)
-delete (L.Icon.Default as any).prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl,
-  iconUrl,
-  shadowUrl,
-});
 
 export type DeviceMapItem = {
   deviceId: string;
   name?: string;
   clientName?: string;
 
-  // ⚠️ peuvent être number | null | undefined (on filtre avant affichage)
+  // lat / lng peuvent être number | null | undefined
   lat?: number | null;
   lng?: number | null;
 
   category?: string;
   battery?: number | null;
-
-  // ✅ Autoriser null pour matcher GuardCloudDevice
   lastHeartbeat?: string | null;
 };
 
@@ -44,6 +23,23 @@ type DevicesMapProps = {
 };
 
 const defaultCenter: [number, number] = [12.3657, -1.5339]; // Ouagadougou
+
+// ✅ Icône par défaut Leaflet, via URLs publiques (pas d'import d’images locales)
+const defaultIcon = L.icon({
+  iconUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  iconRetinaUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  shadowUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41],
+});
+
+// ⚙️ On applique cette icône par défaut à tous les markers
+L.Marker.prototype.options.icon = defaultIcon;
 
 export default function DevicesMap({ devices }: DevicesMapProps) {
   // On garde seulement les devices avec des coordonnées valides
@@ -59,6 +55,7 @@ export default function DevicesMap({ devices }: DevicesMapProps) {
     [devices]
   );
 
+  // Centre : premier device valide ou centre par défaut
   const center = useMemo<[number, number]>(() => {
     if (validDevices.length > 0) {
       return [
@@ -91,22 +88,24 @@ export default function DevicesMap({ devices }: DevicesMapProps) {
           >
             <Popup>
               <div className="text-xs">
-                <div className="font-semibold mb-1">
-                  {title}
-                </div>
+                <div className="font-semibold mb-1">{title}</div>
+
                 <div>
                   <b>ID :</b> {d.deviceId}
                 </div>
+
                 {d.category && (
                   <div>
                     <b>Catégorie :</b> {d.category}
                   </div>
                 )}
+
                 {typeof d.battery === "number" && (
                   <div>
                     <b>Batterie :</b> {d.battery}%
                   </div>
                 )}
+
                 {d.lastHeartbeat && (
                   <div>
                     <b>Dernier HB :</b>{" "}
