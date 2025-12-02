@@ -1,112 +1,112 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo } from 'react';
-import L, { Marker } from 'leaflet';
-import { useMap } from 'react-leaflet';
-import supercluster from 'supercluster';
+import { useEffect } from "react";
+import L from "leaflet";
+import { useMap } from "react-leaflet";
+
+// ❗ supercluster n'a PAS de types officiels compatibles Cloudflare
+// on force l'import JS pur :
+/* @ts-ignore */
+import Supercluster from "supercluster";
 
 interface ClusterLayerProps {
   devices: {
+    id: string;
     lat: number;
     lng: number;
-    deviceId: string;
-    icon: L.Icon;
+    category: string;
   }[];
-  onSelect: (id: string) => void;
+  onClusterClick?: (ids: string[]) => void;
 }
 
-export default function ClusterLayer({ devices, onSelect }: ClusterLayerProps) {
+export default function ClusterLayer({ devices, onClusterClick }: ClusterLayerProps) {
   const map = useMap();
 
-  const index = useMemo(() => {
+  useEffect(() => {
+    if (!map) return;
+
+    // Nettoyage des anciens clusters
+    map.eachLayer((layer) => {
+      // On garde les layers de base (tiles) seulement
+      // @ts-ignore
+      if (!layer._url) map.removeLayer(layer);
+    });
+
+    if (!devices || devices.length === 0) return;
+
+    // Transforme les devices pour supercluster
     const points = devices.map((d) => ({
-      type: 'Feature',
-      properties: { cluster: false, deviceId: d.deviceId },
+      type: "Feature",
+      properties: {
+        id: d.id,
+        category: d.category,
+      },
       geometry: {
-        type: 'Point',
+        type: "Point",
         coordinates: [d.lng, d.lat],
       },
     }));
 
-    return new supercluster({
+    const clusterIndex = new Supercluster({
       radius: 60,
-      maxZoom: 18,
-    }).load(points as any);
-  }, [devices]);
+      maxZoom: 20,
+    }).load(points);
 
-  useEffect(() => {
-    const updateClusters = () => {
-      const bounds = map.getBounds();
-      const zoom = map.getZoom();
+    const bounds = map.getBounds();
+    const zoom = map.getZoom();
 
-      const clusters = index.getClusters(
-        [
-          bounds.getWest(),
-          bounds.getSouth(),
-          bounds.getEast(),
-          bounds.getNorth(),
-        ],
-        zoom
-      );
+    const clusters = clusterIndex.getClusters(
+      [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()],
+      zoom
+    );
 
-      // Clear old markers
-      map.eachLayer((layer: any) => {
-        if (layer.options?.pane === 'markerPane') map.removeLayer(layer);
-      });
+    clusters.forEach((c: any) => {
+      const [lng, lat] = c.geometry.coordinates;
 
-      clusters.forEach((c: any) => {
-        const [lng, lat] = c.geometry.coordinates;
+      if (c.properties.cluster) {
+        const count = c.properties.point_count;
 
-        if (c.properties.cluster) {
-          const count = c.properties.point_count;
+        const icon = L.divIcon({
+          html: `<div style="
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 50%;
+            padding: 10px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+          ">${count}</div>`,
+          className: "",
+        });
 
-          const clusterIcon = L.divIcon({
-            html: `<div style="
-              width:45px;
-              height:45px;
-              background:rgba(255,200,0,0.9);
-              border-radius:50%;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              font-weight:700;
-              font-size:14px;
-              color:#000;
-              border:2px solid #111;
-            ">${count}</div>`,
-            className: '',
-            iconSize: [45, 45],
-          });
+        const marker = L.marker([lat, lng], { icon }).addTo(map);
 
-          const marker = L.marker([lat, lng], { icon: clusterIcon });
-          marker.addTo(map);
+        marker.on("click", () => {
+          const leaves = clusterIndex.getLeaves(c.id, Infinity);
+          const ids = leaves.map((l: any) => l.properties.id);
 
-          // Zoom sur cluster
-          marker.on('click', () => {
-            map.setView([lat, lng], zoom + 2);
-          });
-        } else {
-          const device = devices.find(
-            (d) => d.deviceId === c.properties.deviceId
-          );
+          if (onClusterClick) onClusterClick(ids);
 
-          if (!device) return;
+          map.flyTo([lat, lng], zoom + 2);
+        });
+      } else {
+        // Point normal
+        const marker = L.circleMarker([lat, lng], {
+          radius: 6,
+          color: "#00d2ff",
+          fillColor: "#00d2ff",
+          fillOpacity: 0.8,
+        }).addTo(map);
 
-          const marker = L.marker([lat, lng], { icon: device.icon });
-          marker.addTo(map);
-
-          marker.on('click', () => onSelect(device.deviceId));
-        }
-      });
-    };
-
-    updateClusters();
-    map.on('moveend zoomend', updateClusters);
-
-    return () => {
-      map.off('moveend zoomend', updateClusters);
-    };
-  }, [index, map, devices, onSelect]);
+        marker.on("click", () => {
+          if (onClusterClick) onClusterClick([c.properties.id]);
+        });
+      }
+    });
+  }, [map, devices]);
 
   return null;
 }
