@@ -4,22 +4,29 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
-// 🔒 Pour la vue Client on force l’API sur le Worker en ligne
+// 🔒 API GuardCloud (Worker en ligne)
 const API_BASE = "https://yarmotek-guardcloud-api.myarbanga.workers.dev";
 
 // Même clé que ton login client
 const CLIENT_ID_KEY = "gc_client_id";
 
-// On réutilise la même carte que l’admin
+// Carte réutilisée depuis l’admin
 const DevicesMap = dynamic(() => import("../../admin/devices/DevicesMap"), {
   ssr: false,
 });
+
+/* ------------------------------------------------------------------ */
+/* Types                                                              */
+/* ------------------------------------------------------------------ */
+
+type DeviceCategory = "PHONE" | "PC" | string;
+type FilterCategory = "ALL" | "PHONE" | "PC";
 
 type Device = {
   deviceId: string;
   hardwareId?: string;
   type: string;
-  category: string;
+  category: DeviceCategory;
   name: string;
   clientId?: string;
   clientName?: string;
@@ -30,24 +37,41 @@ type Device = {
   lastHeartbeat?: string;
 };
 
-type FilterCategory = "ALL" | "PHONE" | "PC";
+type RawDevice = Record<string, unknown>;
 
-function normalizeDevices(src: any[]): Device[] {
-  return (src || []).map((d: any) => ({
-    deviceId: d.deviceId,
-    hardwareId: d.hardwareId,
-    type: d.type,
-    category: d.category,
-    name: d.name || d.deviceId,
-    clientId: d.clientId,
-    clientName: d.clientName,
+/* Normalisation des données venant de l’API */
+function normalizeDevices(src: unknown[]): Device[] {
+  return (src as RawDevice[]).map((d) => ({
+    deviceId: String(d.deviceId ?? ""),
+    hardwareId: d.hardwareId ? String(d.hardwareId) : undefined,
+    type: String(d.type ?? "UNKNOWN"),
+    category: String(d.category ?? "UNKNOWN"),
+    name: d.name ? String(d.name) : String(d.deviceId ?? "UNKNOWN"),
+    clientId: d.clientId ? String(d.clientId) : undefined,
+    clientName: d.clientName ? String(d.clientName) : undefined,
     lat: Number(d.lat ?? 0),
     lng: Number(d.lng ?? 0),
-    battery: typeof d.battery === "number" ? d.battery : null,
-    charging: typeof d.charging === "boolean" ? d.charging : null,
-    lastHeartbeat: d.lastHeartbeat,
+    battery:
+      typeof d.battery === "number"
+        ? d.battery
+        : d.battery != null
+        ? Number(d.battery)
+        : null,
+    charging:
+      typeof d.charging === "boolean"
+        ? d.charging
+        : d.charging != null
+        ? Boolean(d.charging)
+        : null,
+    lastHeartbeat: d.lastHeartbeat
+      ? String(d.lastHeartbeat)
+      : undefined,
   }));
 }
+
+/* ------------------------------------------------------------------ */
+/* Page Client                                                        */
+/* ------------------------------------------------------------------ */
 
 export default function ClientDevicesPage() {
   const router = useRouter();
@@ -61,9 +85,10 @@ export default function ClientDevicesPage() {
   const [onlyActive, setOnlyActive] = useState(false);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
 
-  // 1) récupérer l’ID client stocké au login
+  /* 1️⃣ Récupérer l’ID client stocké au login */
   useEffect(() => {
     if (typeof window === "undefined") return;
+
     const id = window.localStorage.getItem(CLIENT_ID_KEY);
     if (!id) {
       router.replace("/client/login");
@@ -72,59 +97,60 @@ export default function ClientDevicesPage() {
     }
   }, [router]);
 
-  // 2) charger les devices via /map/devices puis filtrer par clientId
+  /* 2️⃣ Charger les devices puis filtrer par clientId */
   useEffect(() => {
     if (!clientId) return;
 
     let cancelled = false;
-    const currentId = clientId.toLowerCase(); // ✅ sécurisé
+    const normalizedId = clientId.toLowerCase();
 
     async function fetchDevices() {
       try {
         setError(null);
         setLoading(true);
 
-        console.log("🔌 ClientDevices API_BASE =", API_BASE);
-
-        const url = `${API_BASE}/map/devices`;
-        const res = await fetch(url);
+        const res = await fetch(`${API_BASE}/map/devices`);
 
         if (!res.ok) {
           const txt = await res.text();
-          console.error("❌ /map/devices error:", res.status, txt);
-          throw new Error(`http_${res.status} ${res.statusText}`);
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText} – ${txt}`,
+          );
         }
 
-        const data = await res.json();
-        const all = normalizeDevices(data.devices || data.items || []);
+        const data = (await res.json()) as {
+          devices?: unknown[];
+          items?: unknown[];
+        };
+
+        const all = normalizeDevices(
+          data.devices ?? data.items ?? [],
+        );
 
         const items = all.filter((d) => {
-          const cid = (d.clientId || "").toLowerCase();
-          const cname = (d.clientName || "").toLowerCase();
+          const cid = (d.clientId ?? "").toLowerCase();
+          const cname = (d.clientName ?? "").toLowerCase();
+
           return (
-            cid === currentId ||
-            cname === currentId ||
-            cid.endsWith(currentId) ||
-            currentId.endsWith(cid) ||
-            cname.includes(currentId)
+            cid === normalizedId ||
+            cname === normalizedId ||
+            cid.endsWith(normalizedId) ||
+            normalizedId.endsWith(cid) ||
+            cname.includes(normalizedId)
           );
         });
-
-        console.log(
-          `✅ /map/devices – ${items.length} appareil(s) pour`,
-          currentId
-        );
 
         if (!cancelled) {
           setDevices(items);
           setLastRefresh(new Date());
           setLoading(false);
         }
-      } catch (e: any) {
-        console.error("❌ fetch client devices error:", e);
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "erreur inconnue";
         if (!cancelled) {
           setError(
-            `Impossible de récupérer vos appareils (${e?.message || "erreur inconnue"}).`
+            `Impossible de récupérer vos appareils (${msg}).`,
           );
           setLoading(false);
         }
@@ -133,12 +159,14 @@ export default function ClientDevicesPage() {
 
     fetchDevices();
     const timer = setInterval(fetchDevices, 30_000);
+
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
   }, [clientId]);
 
+  /* Helpers temps & activité */
   const now = Date.now();
   const FIVE_MIN_MS = 5 * 60 * 1000;
 
@@ -149,17 +177,21 @@ export default function ClientDevicesPage() {
     return now - t <= FIVE_MIN_MS;
   }
 
+  /* Stats globales */
   const stats = useMemo(() => {
     const total = devices.length;
     const phones = devices.filter((d) => d.category === "PHONE").length;
     const pcs = devices.filter((d) => d.category === "PC").length;
     const active = devices.filter((d) => isActive(d)).length;
+
     return { total, phones, pcs, active };
   }, [devices, now]);
 
+  /* Devices filtrés pour la carte + tableau */
   const filteredDevices = useMemo(() => {
     return devices.filter((d) => {
-      if (filterCategory === "PHONE" && d.category !== "PHONE") return false;
+      if (filterCategory === "PHONE" && d.category !== "PHONE")
+        return false;
       if (filterCategory === "PC" && d.category !== "PC") return false;
       if (onlyActive && !isActive(d)) return false;
       return true;
@@ -183,7 +215,11 @@ export default function ClientDevicesPage() {
     router.push("/client/login");
   }
 
-  const titleClientId = clientId || "Client";
+  const titleClientId = clientId ?? "Client";
+
+  /* ---------------------------------------------------------------- */
+  /* Rendu                                                            */
+  /* ---------------------------------------------------------------- */
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
@@ -193,7 +229,9 @@ export default function ClientDevicesPage() {
           Yarmotek GuardCloud – Espace Client
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs opacity-70">ID : {titleClientId}</span>
+          <span className="text-xs opacity-70">
+            ID : {titleClientId}
+          </span>
           <button
             onClick={handleLogout}
             className="bg-red-600 hover:bg-red-700 text-xs font-medium px-4 py-1.5 rounded-lg"
@@ -207,10 +245,12 @@ export default function ClientDevicesPage() {
         <div className="max-w-6xl w-full mx-auto">
           {/* Header */}
           <div className="mb-4">
-            <h1 className="text-2xl font-semibold">Mes appareils GuardCloud</h1>
+            <h1 className="text-2xl font-semibold">
+              Mes appareils GuardCloud
+            </h1>
             <p className="text-xs text-gray-500 mt-1">
-              Vue temps réel de vos appareils (PC &amp; smartphones) liés à
-              votre compte.
+              Vue temps réel de vos appareils (PC &amp; smartphones)
+              liés à votre compte.
             </p>
             <p className="text-[11px] text-gray-400 mt-1">
               Dernier rafraîchissement&nbsp;: {lastRefreshStr}
@@ -222,7 +262,7 @@ export default function ClientDevicesPage() {
             <StatCard label="Appareils suivis" value={stats.total} />
             <StatCard label="Smartphones" value={stats.phones} />
             <StatCard label="PC" value={stats.pcs} />
-            <StatCard label="Actifs (< 5 min)" value={stats.active} />
+            <StatCard label="Actifs (&lt; 5 min)" value={stats.active} />
           </div>
 
           {/* Filtres + Carte */}
@@ -290,7 +330,9 @@ export default function ClientDevicesPage() {
                 Chargement de vos appareils…
               </div>
             ) : error ? (
-              <div className="text-xs text-red-600">Erreur : {error}</div>
+              <div className="text-xs text-red-600">
+                Erreur : {error}
+              </div>
             ) : filteredDevices.length === 0 ? (
               <div className="text-xs text-gray-500">
                 Aucun appareil enregistré pour ce compte.
@@ -324,9 +366,11 @@ export default function ClientDevicesPage() {
                           <div className="font-mono text-[11px]">
                             {d.deviceId}
                           </div>
-                          <div className="text-[10px] text-gray-400">
-                            {d.hardwareId || ""}
-                          </div>
+                          {d.hardwareId && (
+                            <div className="text-[10px] text-gray-400">
+                              {d.hardwareId}
+                            </div>
+                          )}
                         </Td>
                         <Td>{d.category || "-"}</Td>
                         <Td>
@@ -363,7 +407,9 @@ export default function ClientDevicesPage() {
                         </Td>
                         <Td>
                           {d.lastHeartbeat
-                            ? new Date(d.lastHeartbeat).toLocaleString("fr-FR", {
+                            ? new Date(
+                                d.lastHeartbeat,
+                              ).toLocaleString("fr-FR", {
                                 day: "2-digit",
                                 month: "2-digit",
                                 year: "numeric",
@@ -385,7 +431,10 @@ export default function ClientDevicesPage() {
   );
 }
 
-// UI helpers
+/* ------------------------------------------------------------------ */
+/* Petits composants UI                                               */
+/* ------------------------------------------------------------------ */
+
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="bg-white rounded-2xl shadow border border-gray-200 px-4 py-3 flex flex-col justify-between">
