@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "leaflet/dist/leaflet.css";   // ✅ SEUL endroit où on importe cette CSS
 import TopNavbar from "@/components/TopNavbar";
 
 export const metadata: Metadata = {
@@ -16,6 +15,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="fr">
+      <head>
+        {/* ✔ Injection propre et Cloudflare-compatible */}
+        <link
+          rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        />
+      </head>
+
       <body className="bg-slate-950 text-white">
         <TopNavbar />
         {children}
