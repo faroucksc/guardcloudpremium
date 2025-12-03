@@ -1,16 +1,29 @@
-"use client";
+'use client';
 
-import { ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { clearAdminToken } from "@/lib/auth";
+import { usePathname, useRouter } from 'next/navigation';
+import type { ReactNode } from 'react';
 
-type Props = {
-  children: ReactNode;
-};
+// 🔐 Helper pour supprimer le token admin
+function clearAdminToken() {
+  if (typeof window !== 'undefined') {
+    try {
+      // LocalStorage / SessionStorage
+      window.localStorage.removeItem('admin_token');
+      window.sessionStorage?.removeItem('admin_token');
 
-export default function AdminShell({ children }: Props) {
+      // Cookie éventuel
+      document.cookie =
+        'admin_token=; Max-Age=0; path=/; SameSite=Lax;';
+    } catch (e) {
+      console.warn('clearAdminToken error:', e);
+    }
+  }
+}
+
+export function AdminShell({ children }: { children: ReactNode }) {
+  const rawPathname = usePathname();
+  const pathname = rawPathname ?? '/';
   const router = useRouter();
-  const pathname = usePathname();
 
   function isActive(path: string) {
     return pathname.startsWith(path);
@@ -18,7 +31,7 @@ export default function AdminShell({ children }: Props) {
 
   function handleLogout() {
     clearAdminToken();
-    router.replace("/admin/login");
+    router.replace('/admin/login');
   }
 
   return (
@@ -43,19 +56,21 @@ export default function AdminShell({ children }: Props) {
         <nav className="flex items-center gap-2 md:gap-4 text-xs md:text-sm">
           <NavLink
             href="/admin/devices"
-            active={isActive("/admin/devices")}
+            active={isActive('/admin/devices')}
           >
             Admin global
           </NavLink>
+
           <NavLink
             href="/admin/clients"
-            active={isActive("/admin/clients")}
+            active={isActive('/admin/clients')}
           >
             Clients
           </NavLink>
+
           <NavLink
             href="/admin/resellers"
-            active={isActive("/admin/resellers")}
+            active={isActive('/admin/resellers')}
           >
             Revendeurs
           </NavLink>
@@ -93,8 +108,8 @@ function NavLink({
       onClick={() => router.push(href)}
       className={`px-3 py-1.5 rounded-full border text-xs md:text-sm transition ${
         active
-          ? "bg-blue-600 text-white border-blue-600"
-          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+          ? 'bg-blue-600 text-white border-blue-600'
+          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
       }`}
     >
       {children}

@@ -1,6 +1,13 @@
-// app/admin/devices/page.tsx
+'use client';
 
-import DevicesMapClient from './DevicesMapClient';
+import dynamic from 'next/dynamic';
+
+const DevicesMapClient = dynamic(
+  () => import('./DevicesMapClient'),
+  {
+    ssr: false,
+  }
+);
 
 export default function DevicesPage() {
   return <DevicesMapClient />;
