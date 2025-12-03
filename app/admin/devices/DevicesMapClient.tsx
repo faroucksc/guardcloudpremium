@@ -2,9 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 
-// On évite tout import direct de 'leaflet' / 'react-leaflet' ici.
-// On utilisera require() côté client uniquement.
+// ATTENTION : PAS d'import "leaflet/dist/leaflet.css" ici !
+// On va charger la CSS via <link> CDN dans app/layout.tsx.
 
+// Types simples
 type LatLngTuple = [number, number];
 
 type ApiDevice = {
@@ -40,7 +41,7 @@ export default function DevicesMapClient() {
   const defaultCenter: LatLngTuple = [12.3657, -1.5339];
   const defaultZoom = 12;
 
-  // === Chargement des données depuis l'API GuardCloud ===
+  // ==== Chargement depuis l'API GuardCloud ====
   const fetchDevices = async () => {
     try {
       setLoading(true);
@@ -48,9 +49,7 @@ export default function DevicesMapClient() {
 
       const res = await fetch(`${API_BASE}/device/list`, {
         method: 'GET',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: { Accept: 'application/json' },
       });
 
       if (!res.ok) {
@@ -109,7 +108,7 @@ export default function DevicesMapClient() {
     return [lat as number, lng as number];
   }, [devices]);
 
-  // === IMPORTANT : rien de Leaflet si on est côté serveur ===
+  // Important : ne rien faire lié au DOM côté serveur
   if (typeof window === 'undefined') {
     return (
       <div className="w-full h-[calc(100vh-140px)] flex items-center justify-center bg-slate-900 text-white">
@@ -118,10 +117,9 @@ export default function DevicesMapClient() {
     );
   }
 
-  // On importe leaflet / react-leaflet UNIQUEMENT côté client
+  // Import dynamique de Leaflet uniquement côté client
   const { MapContainer, TileLayer, Marker, Popup } = require('react-leaflet');
   const L = require('leaflet');
-  require('leaflet/dist/leaflet.css');
 
   const defaultIcon = new L.Icon({
     iconUrl:
@@ -136,7 +134,6 @@ export default function DevicesMapClient() {
     shadowSize: [41, 41],
   });
 
-  // Icône par défaut globale
   L.Icon.Default.mergeOptions({
     iconUrl:
       'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
@@ -182,7 +179,7 @@ export default function DevicesMapClient() {
         className="w-full h-full"
       >
         <TileLayer
-          attribution='&copy; OpenStreetMap contributors'
+          attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
