@@ -1,19 +1,25 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 
 // 🔒 API GuardCloud (Worker en ligne)
-const API_BASE = "https://yarmotek-guardcloud-api.myarbanga.workers.dev";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  "https://yarmotek-guardcloud-api.myarbanga.workers.dev";
 
 // Même clé que ton login client
 const CLIENT_ID_KEY = "gc_client_id";
 
 // Carte réutilisée depuis l’admin
-const DevicesMap = dynamic(() => import("../../admin/devices/DevicesMap"), {
-  ssr: false,
-});
+const DevicesMap = dynamic(
+  () => import("../../admin/devices/DevicesMap"),
+  {
+    ssr: false,
+  },
+);
 
 /* ------------------------------------------------------------------ */
 /* Types                                                              */
@@ -39,7 +45,31 @@ type Device = {
 
 type RawDevice = Record<string, unknown>;
 
-/* Normalisation des données venant de l’API */
+type MapDevicesResponse = {
+  devices?: unknown[];
+  items?: unknown[];
+};
+
+type InvoicesByClientError = {
+  ok: false;
+  error?: string;
+};
+
+/* ------------------------------------------------------------------ */
+/* Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
+const FIVE_MIN_MS = 5 * 60 * 1000;
+
+/** Vérifie si un device est actif (heartbeat < 5 min) */
+function isActive(d: Device): boolean {
+  if (!d.lastHeartbeat) return false;
+  const t = new Date(d.lastHeartbeat).getTime();
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t <= FIVE_MIN_MS;
+}
+
+/** Normalisation des données venant de l’API */
 function normalizeDevices(src: unknown[]): Device[] {
   return (src as RawDevice[]).map((d) => ({
     deviceId: String(d.deviceId ?? ""),
@@ -118,10 +148,7 @@ export default function ClientDevicesPage() {
           );
         }
 
-        const data = (await res.json()) as {
-          devices?: unknown[];
-          items?: unknown[];
-        };
+        const data = (await res.json()) as MapDevicesResponse;
 
         const all = normalizeDevices(
           data.devices ?? data.items ?? [],
@@ -145,7 +172,7 @@ export default function ClientDevicesPage() {
           setLastRefresh(new Date());
           setLoading(false);
         }
-      } catch (err: unknown) {
+      } catch (err) {
         const msg =
           err instanceof Error ? err.message : "erreur inconnue";
         if (!cancelled) {
@@ -166,37 +193,33 @@ export default function ClientDevicesPage() {
     };
   }, [clientId]);
 
-  /* Helpers temps & activité */
-  const now = Date.now();
-  const FIVE_MIN_MS = 5 * 60 * 1000;
-
-  function isActive(d: Device): boolean {
-    if (!d.lastHeartbeat) return false;
-    const t = new Date(d.lastHeartbeat).getTime();
-    if (Number.isNaN(t)) return false;
-    return now - t <= FIVE_MIN_MS;
-  }
-
   /* Stats globales */
   const stats = useMemo(() => {
     const total = devices.length;
-    const phones = devices.filter((d) => d.category === "PHONE").length;
+    const phones = devices.filter(
+      (d) => d.category === "PHONE",
+    ).length;
     const pcs = devices.filter((d) => d.category === "PC").length;
     const active = devices.filter((d) => isActive(d)).length;
 
     return { total, phones, pcs, active };
-  }, [devices, now]);
+  }, [devices]);
 
   /* Devices filtrés pour la carte + tableau */
   const filteredDevices = useMemo(() => {
     return devices.filter((d) => {
-      if (filterCategory === "PHONE" && d.category !== "PHONE")
+      if (filterCategory === "PHONE" && d.category !== "PHONE") {
         return false;
-      if (filterCategory === "PC" && d.category !== "PC") return false;
-      if (onlyActive && !isActive(d)) return false;
+      }
+      if (filterCategory === "PC" && d.category !== "PC") {
+        return false;
+      }
+      if (onlyActive && !isActive(d)) {
+        return false;
+      }
       return true;
     });
-  }, [devices, filterCategory, onlyActive, now]);
+  }, [devices, filterCategory, onlyActive]);
 
   const filteredCount = filteredDevices.length;
 
@@ -262,14 +285,19 @@ export default function ClientDevicesPage() {
             <StatCard label="Appareils suivis" value={stats.total} />
             <StatCard label="Smartphones" value={stats.phones} />
             <StatCard label="PC" value={stats.pcs} />
-            <StatCard label="Actifs (&lt; 5 min)" value={stats.active} />
+            <StatCard
+              label="Actifs (< 5 min)"
+              value={stats.active}
+            />
           </div>
 
           {/* Filtres + Carte */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
             {/* Filtres */}
             <div className="bg-white rounded-2xl shadow border border-gray-200 p-4">
-              <h2 className="text-sm font-semibold mb-3">Filtres</h2>
+              <h2 className="text-sm font-semibold mb-3">
+                Filtres
+              </h2>
               <div className="flex gap-2 mb-3">
                 <FilterPill
                   label="Tous"
@@ -292,10 +320,13 @@ export default function ClientDevicesPage() {
                 <input
                   type="checkbox"
                   checked={onlyActive}
-                  onChange={(e) => setOnlyActive(e.target.checked)}
+                  onChange={(e) =>
+                    setOnlyActive(e.target.checked)
+                  }
                   className="rounded"
                 />
-                Afficher uniquement les appareils actifs (&lt; 5 min)
+                Afficher uniquement les appareils actifs (&lt; 5
+                min)
               </label>
 
               <p className="mt-3 text-[11px] text-gray-400">
@@ -402,7 +433,9 @@ export default function ClientDevicesPage() {
                                 : "bg-gray-100 text-gray-500"
                             }`}
                           >
-                            {isActive(d) ? "Actif" : "Inactif"}
+                            {isActive(d)
+                              ? "Actif"
+                              : "Inactif"}
                           </span>
                         </Td>
                         <Td>
@@ -435,10 +468,18 @@ export default function ClientDevicesPage() {
 /* Petits composants UI                                               */
 /* ------------------------------------------------------------------ */
 
-function StatCard({ label, value }: { label: string; value: number }) {
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: number;
+}) {
   return (
     <div className="bg-white rounded-2xl shadow border border-gray-200 px-4 py-3 flex flex-col justify-between">
-      <div className="text-[11px] text-gray-500 mb-1">{label}</div>
+      <div className="text-[11px] text-gray-500 mb-1">
+        {label}
+      </div>
       <div className="text-xl font-semibold">{value}</div>
     </div>
   );
@@ -468,7 +509,7 @@ function FilterPill({
   );
 }
 
-function Th({ children }: { children: React.ReactNode }) {
+function Th({ children }: { children: ReactNode }) {
   return (
     <th className="text-left font-medium px-3 py-2 border-b border-gray-100">
       {children}
@@ -476,6 +517,6 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Td({ children }: { children: React.ReactNode }) {
+function Td({ children }: { children: ReactNode }) {
   return <td className="px-3 py-2 align-top">{children}</td>;
 }

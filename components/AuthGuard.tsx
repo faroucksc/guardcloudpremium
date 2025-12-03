@@ -1,44 +1,24 @@
 "use client";
 
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ReactNode, useEffect, useState } from "react";
 import { getAdminToken } from "@/lib/auth";
 
-type Props = {
-  children: ReactNode;
+type AuthGuardProps = {
+  children: React.ReactNode;
 };
 
-export default function AuthGuard({ children }: Props) {
+export default function AuthGuard({ children }: AuthGuardProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<"checking" | "ok" | "redirecting">(
-    "checking"
-  );
 
   useEffect(() => {
     const token = getAdminToken();
     if (!token) {
-      setStatus("redirecting");
       router.replace("/admin/login");
-    } else {
-      setStatus("ok");
     }
   }, [router]);
 
-  if (status === "checking") {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-sm text-gray-500">
-        Vérification de la session administrateur...
-      </div>
-    );
-  }
-
-  if (status === "redirecting") {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center text-sm text-gray-500">
-        Redirection vers la page de connexion...
-      </div>
-    );
-  }
-
+  // On laisse React afficher la page.
+  // Si pas de token, la redirection prend le relais.
   return <>{children}</>;
 }

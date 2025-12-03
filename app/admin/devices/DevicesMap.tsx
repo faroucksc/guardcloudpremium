@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -25,6 +24,11 @@ type Device = {
 const { BaseLayer } = LayersControl;
 
 /* ============================================================
+   🌍 Centre par défaut : Ouagadougou
+============================================================ */
+const DEFAULT_CENTER: [number, number] = [12.3657, -1.5339];
+
+/* ============================================================
    🔧 Icône Leaflet par défaut (OK Next.js / Cloudflare)
 ============================================================ */
 const defaultIcon = L.icon({
@@ -38,37 +42,35 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41],
 });
 
-// on applique à tous les markers
+// On applique cette icône à tous les markers
 L.Marker.prototype.options.icon = defaultIcon;
 
 /* ============================================================
    🗺️ Composant principal
 ============================================================ */
 export default function DevicesMap({ devices }: { devices: Device[] }) {
-  const defaultCenter: [number, number] = [12.3657, -1.5339]; // Ouagadougou
-
-  // Devices avec coordonnés valides
-  const coords = useMemo(
-    () =>
-      (devices || []).filter(
-        (d) =>
-          typeof d.lat === "number" &&
-          !Number.isNaN(d.lat) &&
-          typeof d.lng === "number" &&
-          !Number.isNaN(d.lng)
-      ),
-    [devices]
+  // On garde uniquement les devices avec coordonnées valides
+  const coords = (devices || []).filter(
+    (d) =>
+      typeof d.lat === "number" &&
+      !Number.isNaN(d.lat) &&
+      typeof d.lng === "number" &&
+      !Number.isNaN(d.lng)
   );
 
   // Centre moyen des devices, sinon centre par défaut
-  const center = useMemo<[number, number]>(() => {
-    if (coords.length === 0) return defaultCenter;
-
-    const sumLat = coords.reduce((sum, d) => sum + (d.lat as number), 0);
-    const sumLng = coords.reduce((sum, d) => sum + (d.lng as number), 0);
-
-    return [sumLat / coords.length, sumLng / coords.length];
-  }, [coords]);
+  let center: [number, number] = DEFAULT_CENTER;
+  if (coords.length > 0) {
+    const sumLat = coords.reduce(
+      (sum, d) => sum + (d.lat as number),
+      0
+    );
+    const sumLng = coords.reduce(
+      (sum, d) => sum + (d.lng as number),
+      0
+    );
+    center = [sumLat / coords.length, sumLng / coords.length];
+  }
 
   return (
     <MapContainer

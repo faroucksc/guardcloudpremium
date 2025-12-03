@@ -27,6 +27,12 @@ type Invoice = {
   paidAt?: string;
 };
 
+type InvoicesApiResponse = {
+  ok: boolean;
+  invoices?: Invoice[];
+  error?: string;
+};
+
 const CLIENT_ID = "CLIENT-TEST";
 
 function periodLabel(p: string) {
@@ -37,6 +43,7 @@ function periodLabel(p: string) {
 
 function statusBadge(status: string) {
   const up = (status || "").toUpperCase();
+
   if (up === "PAID") {
     return (
       <span className="inline-flex rounded-full bg-emerald-900/80 px-3 py-1 text-xs font-medium text-emerald-200">
@@ -44,6 +51,7 @@ function statusBadge(status: string) {
       </span>
     );
   }
+
   if (up === "PENDING") {
     return (
       <span className="inline-flex rounded-full bg-amber-900/80 px-3 py-1 text-xs font-medium text-amber-200">
@@ -51,11 +59,22 @@ function statusBadge(status: string) {
       </span>
     );
   }
+
   return (
     <span className="inline-flex rounded-full bg-gray-800 px-3 py-1 text-xs font-medium text-gray-200">
       {status || "Inconnu"}
     </span>
   );
+}
+
+function getErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Erreur inconnue";
+  }
 }
 
 export default function BillingInvoicesTable() {
@@ -69,30 +88,29 @@ export default function BillingInvoicesTable() {
         setLoading(true);
         setError(null);
 
-        const res = await fetch(
-          `${API_BASE}/billing/invoices/by-client?clientId=${encodeURIComponent(
-            CLIENT_ID
-          )}`
-        );
+        const url = `${API_BASE}/billing/invoices/by-client?clientId=${encodeURIComponent(
+          CLIENT_ID
+        )}`;
+
+        const res = await fetch(url);
 
         if (!res.ok) {
           throw new Error(`HTTP ${res.status.toString()}`);
         }
 
-        const data = (await res.json()) as {
-          ok: boolean;
-          invoices?: Invoice[];
-          error?: string;
-        };
+        const data = (await res.json()) as InvoicesApiResponse;
 
         if (!data.ok) {
           throw new Error(data.error || "Erreur API");
         }
 
         setInvoices(data.invoices ?? []);
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
-        setError(e.message || "Erreur lors du chargement des factures");
+        setError(
+          getErrorMessage(e) ||
+            "Erreur lors du chargement des factures"
+        );
       } finally {
         setLoading(false);
       }
@@ -102,6 +120,7 @@ export default function BillingInvoicesTable() {
   }, []);
 
   const handleDownloadReceipt = (invoiceId: string) => {
+    if (typeof window === "undefined") return;
     window.open(`/api/invoices/${invoiceId}/pdf`, "_blank");
   };
 
@@ -163,6 +182,7 @@ export default function BillingInvoicesTable() {
         <tbody>
           {invoices.map((inv) => {
             const created = new Date(inv.createdAt);
+
             return (
               <tr
                 key={inv.invoiceId}
@@ -173,22 +193,30 @@ export default function BillingInvoicesTable() {
                   {inv.paidAt && (
                     <div className="text-xs text-emerald-300">
                       Payée le{" "}
-                      {new Date(inv.paidAt).toLocaleDateString("fr-FR")}
+                      {new Date(
+                        inv.paidAt
+                      ).toLocaleDateString("fr-FR")}
                     </div>
                   )}
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   <div className="font-semibold">
                     {inv.clientName ?? inv.clientId}
                   </div>
-                  <div className="text-xs text-gray-400">{inv.clientId}</div>
+                  <div className="text-xs text-gray-400">
+                    {inv.clientId}
+                  </div>
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   {periodLabel(inv.billing.period)}
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   {inv.billing.devicesCount}
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   <div className="font-semibold text-emerald-400">
                     {inv.billing.totalXof.toLocaleString("fr-FR")} XOF
@@ -197,12 +225,15 @@ export default function BillingInvoicesTable() {
                     ≈ {inv.billing.approxUsd.toFixed(2)} USD
                   </div>
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   {statusBadge(inv.status)}
                 </td>
+
                 <td className="px-6 py-3 align-middle">
                   {created.toLocaleDateString("fr-FR")}
                 </td>
+
                 <td className="px-6 py-3 align-middle space-x-2">
                   <a
                     href={inv.checkoutUrl}
@@ -212,9 +243,13 @@ export default function BillingInvoicesTable() {
                   >
                     Voir paiement
                   </a>
+
                   {inv.status.toUpperCase() === "PAID" && (
                     <button
-                      onClick={() => handleDownloadReceipt(inv.invoiceId)}
+                      type="button"
+                      onClick={() =>
+                        handleDownloadReceipt(inv.invoiceId)
+                      }
                       className="inline-block rounded-full bg-sky-500 px-4 py-1 text-xs font-semibold text-black hover:bg-sky-400"
                     >
                       Reçu PDF
@@ -228,8 +263,8 @@ export default function BillingInvoicesTable() {
       </table>
 
       <div className="px-6 py-4 text-xs text-gray-400 border-t border-gray-800">
-        Historique des factures générées par l&apos;API GuardCloud (MoneyFusion
-        – Fusion Link).
+        Historique des factures générées par l&apos;API GuardCloud
+        (MoneyFusion – Fusion Link).
       </div>
     </div>
   );

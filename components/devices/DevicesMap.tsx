@@ -1,122 +1,150 @@
 "use client";
 
-import { useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  LayersControl,
+} from "react-leaflet";
 import L from "leaflet";
 
-export type DeviceMapItem = {
+type Device = {
   deviceId: string;
-  name?: string;
+  name: string;
   clientName?: string;
-
-  lat?: number | null;
-  lng?: number | null;
-
-  category?: string;
-  battery?: number | null;
-  lastHeartbeat?: string | null;
+  category: string;
+  lat: number | null;
+  lng: number | null;
+  battery: number | null;
+  charging: boolean | null;
+  lastHeartbeat?: string;
 };
 
-type DevicesMapProps = {
-  devices: DeviceMapItem[];
-};
+const { BaseLayer } = LayersControl;
 
-const defaultCenter: [number, number] = [12.3657, -1.5339]; // Ouagadougou
+/* ============================================================
+   🌍 Centre par défaut : Ouagadougou
+============================================================ */
+const DEFAULT_CENTER: [number, number] = [12.3657, -1.5339];
 
-// =====================================================
-//  Icône Leaflet via CDN (pas d'import d'images locales)
-// =====================================================
+/* ============================================================
+   🔧 Icône Leaflet par défaut (OK Next.js / Cloudflare)
+============================================================ */
 const defaultIcon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl:
-    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl:
+    "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
   iconSize: [25, 41],
   iconAnchor: [12, 41],
   popupAnchor: [1, -34],
   shadowSize: [41, 41],
 });
 
+// On applique cette icône à tous les markers
 L.Marker.prototype.options.icon = defaultIcon;
 
-export default function DevicesMap({ devices }: DevicesMapProps) {
-  const validDevices = useMemo(
-    () =>
-      (devices || []).filter((d) => {
-        const latOK = typeof d.lat === "number" && !Number.isNaN(d.lat);
-        const lngOK = typeof d.lng === "number" && !Number.isNaN(d.lng);
-        return latOK && lngOK;
-      }),
-    [devices]
+/* ============================================================
+   🗺️ Composant principal
+============================================================ */
+export default function DevicesMap({ devices }: { devices: Device[] }) {
+  // On garde uniquement les devices avec coordonnées valides
+  const coords = (devices || []).filter(
+    (d) =>
+      typeof d.lat === "number" &&
+      !Number.isNaN(d.lat) &&
+      typeof d.lng === "number" &&
+      !Number.isNaN(d.lng)
   );
 
-  const center = useMemo<[number, number]>(() => {
-    if (validDevices.length > 0) {
-      return [
-        validDevices[0].lat as number,
-        validDevices[0].lng as number,
-      ];
-    }
-    return defaultCenter;
-  }, [validDevices]);
+  // Centre moyen des devices, sinon centre par défaut
+  let center: [number, number] = DEFAULT_CENTER;
+  if (coords.length > 0) {
+    const sumLat = coords.reduce(
+      (sum, d) => sum + (d.lat as number),
+      0
+    );
+    const sumLng = coords.reduce(
+      (sum, d) => sum + (d.lng as number),
+      0
+    );
+    center = [sumLat / coords.length, sumLng / coords.length];
+  }
 
   return (
     <MapContainer
       center={center}
-      zoom={13}
-      className="w-full h-full"
+      zoom={12}
       scrollWheelZoom
+      style={{ width: "100%", height: "100%" }}
     >
-      <TileLayer
-        attribution="© OpenStreetMap"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <LayersControl position="topright">
+        <BaseLayer checked name="Routier (OSM)">
+          <TileLayer
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        </BaseLayer>
 
-      {validDevices.map((d) => {
-        const title = d.name || d.clientName || d.deviceId;
+        <BaseLayer name="Satellite (Esri)">
+          <TileLayer
+            attribution="Tiles &copy; Esri"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        </BaseLayer>
+      </LayersControl>
 
-        return (
-          <Marker
-            key={d.deviceId}
-            position={[d.lat as number, d.lng as number]}
-          >
-            <Popup>
-              <div className="text-xs">
-                <div className="font-semibold mb-1">{title}</div>
+      {/* Marqueurs */}
+      {coords.map((d) => (
+        <Marker
+          key={d.deviceId}
+          position={[d.lat as number, d.lng as number]}
+        >
+          <Popup>
+            <div className="text-xs leading-tight">
+              <div className="font-semibold mb-1">{d.name}</div>
 
-                <div>
-                  <b>ID :</b> {d.deviceId}
-                </div>
-
-                {d.category && (
-                  <div>
-                    <b>Catégorie :</b> {d.category}
-                  </div>
-                )}
-
-                {typeof d.battery === "number" && (
-                  <div>
-                    <b>Batterie :</b> {d.battery}% 
-                  </div>
-                )}
-
-                {d.lastHeartbeat && (
-                  <div>
-                    <b>Dernier HB :</b>{" "}
-                    {new Date(d.lastHeartbeat).toLocaleString("fr-FR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                )}
+              <div className="mb-1">
+                <span className="font-medium">Client&nbsp;:</span>{" "}
+                {d.clientName || "-"}
               </div>
-            </Popup>
-          </Marker>
-        );
-      })}
+
+              <div className="mb-1">
+                <span className="font-medium">Catégorie&nbsp;:</span>{" "}
+                {d.category}
+              </div>
+
+              {typeof d.battery === "number" && (
+                <div className="mb-1">
+                  <span className="font-medium">Batterie&nbsp;:</span>{" "}
+                  {d.battery}%{" "}
+                  <span className="text-[10px] text-gray-500">
+                    {d.charging === true
+                      ? "(En charge)"
+                      : d.charging === false
+                      ? "(Sur batterie)"
+                      : ""}
+                  </span>
+                </div>
+              )}
+
+              {d.lastHeartbeat && (
+                <div className="text-[10px] text-gray-500">
+                  Dernier HB&nbsp;:
+                  {new Date(d.lastHeartbeat).toLocaleString("fr-FR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              )}
+            </div>
+          </Popup>
+        </Marker>
+      ))}
     </MapContainer>
   );
 }

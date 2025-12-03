@@ -3,23 +3,18 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   reactStrictMode: false,
 
-  // ✅ On désactive ESLint pendant les builds de prod
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // ⚙️ Static export pour Cloudflare Pages
+  output: "export",
 
-  // ✅ On laisse passer les erreurs TypeScript pendant le build
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-
-  // ✅ Nécessaire pour `next export` (Cloudflare Pages statique)
+  // ⚙️ Pas d’optimisation d’images côté Next (Cloudflare s’en charge très bien)
   images: {
     unoptimized: true,
   },
 
-  // ✅ On génère un site full static pour Cloudflare Pages
-  output: "export",
+  // ⚙️ IMPORTANT : on désactive ESLint pendant le build
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
 };
 
 export default nextConfig;

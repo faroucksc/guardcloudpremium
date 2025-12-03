@@ -1,66 +1,53 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import Image from "next/image";
-import { jwtDecode } from "jwt-decode";
 
-const TopNavbar = () => {
-  const [jwt, setJwt] = useState<string | null>(null);
-  const [role, setRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("YGC_JWT");
-    if (!stored) return;
-    setJwt(stored);
-
-    try {
-      const decoded: any = jwtDecode(stored);
-      setRole(decoded.role || null);
-    } catch {
-      // ignore
-    }
-  }, []);
-
+export default function TopNavbar() {
   return (
-    <div className="w-full bg-slate-950 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
-      {/* LEFT : Logo + Branding */}
-      <div className="flex items-center gap-3">
-
-        {/* Logo rond Yarmotek */}
-        <div className="w-11 h-11 rounded-full overflow-hidden border border-slate-700 bg-slate-900 flex items-center justify-center">
+    <header className="sticky top-0 z-40 bg-black/90 backdrop-blur border-b border-white/5">
+      <nav className="h-14 flex items-center justify-between px-4 md:px-8">
+        {/* Logo + titre */}
+        <div className="flex items-center gap-2">
           <Image
-            src="/logo-yarmotek.png"
-            alt="Yarmotek Logo"
-            width={44}
-            height={44}
-            className="object-cover"
+            src="/yarmotek-logo.png"
+            alt="Yarmotek GuardCloud"
+            width={28}
+            height={28}
+            className="rounded-md"
           />
+          <div className="flex flex-col leading-tight">
+            <span className="font-semibold text-sm">
+              Yarmotek GuardCloud
+            </span>
+            <span className="text-[10px] text-gray-400">
+              Premium 2025 • Phones • PC • Drones • IoT
+            </span>
+          </div>
         </div>
 
-        <div className="flex flex-col leading-tight">
-          <span className="font-semibold text-base text-slate-200 tracking-tight">
-            YARMOTEK <span className="text-amber-400">GUARDCLOUD</span>
-          </span>
-
-          <span className="text-[11px] text-slate-400">
-            UNIVERSAL TRACKING • PHONES • PC • DRONES • GPS • IOT
-          </span>
+        {/* Liens rapides */}
+        <div className="flex items-center gap-3 text-[11px]">
+          <Link
+            href="/admin/devices"
+            className="px-2 py-1 rounded-lg hover:bg-white/10 transition"
+          >
+            Admin
+          </Link>
+          <Link
+            href="/client/devices"
+            className="px-2 py-1 rounded-lg hover:bg-white/10 transition"
+          >
+            Client
+          </Link>
+          <Link
+            href="/billing"
+            className="px-2 py-1 rounded-lg hover:bg-white/10 transition"
+          >
+            Billing
+          </Link>
         </div>
-      </div>
-
-      {/* RIGHT : Boutons */}
-      <div className="flex items-center gap-3">
-        <select className="bg-slate-900 text-slate-200 border border-slate-700 text-xs px-2 py-1 rounded">
-          <option value="FR">FR</option>
-          <option value="EN">EN</option>
-        </select>
-
-        <button className="bg-emerald-500 hover:bg-emerald-400 text-black text-xs px-4 py-1.5 rounded font-semibold">
-          Coller un JWT
-        </button>
-      </div>
-    </div>
+      </nav>
+    </header>
   );
-};
-
-export default TopNavbar;
+}
