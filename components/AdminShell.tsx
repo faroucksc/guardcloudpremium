@@ -1,37 +1,65 @@
-'use client';
+"use client";
 
-import { usePathname, useRouter } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
 
-// 🔐 Helper pour supprimer le token admin
+/**
+ * 🔐 Helper pour supprimer le token admin (logout)
+ */
 function clearAdminToken() {
-  if (typeof window !== 'undefined') {
-    try {
-      // LocalStorage / SessionStorage
-      window.localStorage.removeItem('admin_token');
-      window.sessionStorage?.removeItem('admin_token');
-
-      // Cookie éventuel
-      document.cookie =
-        'admin_token=; Max-Age=0; path=/; SameSite=Lax;';
-    } catch (e) {
-      console.warn('clearAdminToken error:', e);
-    }
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem("YGC_ADMIN_TOKEN");
+  } catch {
+    // on ignore les erreurs de localStorage
   }
 }
 
+/**
+ * 💡 Petit composant de lien de navigation (topbar)
+ */
+function NavLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: ReactNode;
+}) {
+  const router = useRouter();
+
+  return (
+    <button
+      type="button"
+      onClick={() => router.push(href)}
+      className={`px-3 py-1.5 rounded-full border text-xs md:text-sm transition ${
+        active
+          ? "bg-blue-600 text-white border-blue-600"
+          : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * 🧱 Shell d'administration global Yarmotek GuardCloud
+ */
 export function AdminShell({ children }: { children: ReactNode }) {
   const rawPathname = usePathname();
-  const pathname = rawPathname ?? '/';
-  const router = useRouter();
+  const pathname = rawPathname ?? "/";
 
   function isActive(path: string) {
     return pathname.startsWith(path);
   }
 
+  const router = useRouter();
+
   function handleLogout() {
     clearAdminToken();
-    router.replace('/admin/login');
+    router.replace("/admin/login");
   }
 
   return (
@@ -56,21 +84,21 @@ export function AdminShell({ children }: { children: ReactNode }) {
         <nav className="flex items-center gap-2 md:gap-4 text-xs md:text-sm">
           <NavLink
             href="/admin/devices"
-            active={isActive('/admin/devices')}
+            active={isActive("/admin/devices")}
           >
             Admin global
           </NavLink>
 
           <NavLink
             href="/admin/clients"
-            active={isActive('/admin/clients')}
+            active={isActive("/admin/clients")}
           >
             Clients
           </NavLink>
 
           <NavLink
             href="/admin/resellers"
-            active={isActive('/admin/resellers')}
+            active={isActive("/admin/resellers")}
           >
             Revendeurs
           </NavLink>
@@ -91,28 +119,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   );
 }
 
-function NavLink({
-  href,
-  active,
-  children,
-}: {
-  href: string;
-  active: boolean;
-  children: ReactNode;
-}) {
-  const router = useRouter();
-
-  return (
-    <button
-      type="button"
-      onClick={() => router.push(href)}
-      className={`px-3 py-1.5 rounded-full border text-xs md:text-sm transition ${
-        active
-          ? 'bg-blue-600 text-white border-blue-600'
-          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
+/**
+ * ✅ Export par défaut pour supporter :
+ *    import AdminShell from "@/components/AdminShell";
+ */
+export default AdminShell;

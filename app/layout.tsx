@@ -1,9 +1,9 @@
-import './globals.css';
-import type { ReactNode } from 'react';
+import "./globals.css";
+import type { ReactNode } from "react";
 
 export const metadata = {
-  title: 'Yarmotek GuardCloud Premium',
-  description: 'SaaS de gestion IoT & sécurité',
+  title: "Yarmotek GuardCloud Premium",
+  description: "SaaS de gestion IoT & sécurité",
 };
 
 export default function RootLayout({
@@ -14,7 +14,7 @@ export default function RootLayout({
   return (
     <html lang="fr">
       <head>
-        {/* CSS Leaflet via CDN → pas gérée par Webpack, donc aucun problème de build */}
+        {/* ✅ CSS Leaflet chargée via CDN, plus d'import webpack */}
         <link
           rel="stylesheet"
           href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"

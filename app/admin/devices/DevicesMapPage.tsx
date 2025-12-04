@@ -17,7 +17,7 @@ import {
 } from 'react-leaflet';
 import type { LatLngTuple } from 'leaflet';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+
 
 // --------- Types ---------
 
